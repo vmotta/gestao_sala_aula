@@ -1,7 +1,6 @@
-import hashlib
 import sqlite3
 from contextlib import closing
-from datetime import date, datetime, time
+from datetime import datetime, date, time
 from pathlib import Path
 
 import pandas as pd
@@ -20,24 +19,10 @@ def get_conn():
     return conn
 
 
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
-
 def init_db() -> None:
     with closing(get_conn()) as conn, conn:
         conn.executescript(
             """
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                full_name TEXT NOT NULL,
-                role TEXT NOT NULL CHECK(role IN ('viewer', 'admin')),
-                status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'inactive')),
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-
             CREATE TABLE IF NOT EXISTS spaces (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
@@ -78,18 +63,6 @@ def init_db() -> None:
             """
         )
 
-        default_users = [
-            ("admin", hash_password("admin123"), "Administrador", "admin", "active"),
-            ("visitante", hash_password("visitante123"), "Usuário Visualizador", "viewer", "active"),
-        ]
-        conn.executemany(
-            """
-            INSERT OR IGNORE INTO users (username, password_hash, full_name, role, status)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            default_users,
-        )
-
 
 def fetch_df(query: str, params: tuple = ()) -> pd.DataFrame:
     with closing(get_conn()) as conn:
@@ -101,20 +74,15 @@ def execute(query: str, params: tuple = ()) -> None:
         conn.execute(query, params)
 
 
-def fetch_one(query: str, params: tuple = ()):
-    with closing(get_conn()) as conn:
-        return conn.execute(query, params).fetchone()
+def execute_many(query: str, params_seq: list[tuple]) -> None:
+    with closing(get_conn()) as conn, conn:
+        conn.executemany(query, params_seq)
 
 
 # -----------------------------
 # Regras de negócio
 # -----------------------------
-def has_booking_conflict(
-    space_id: int,
-    start_dt: str,
-    end_dt: str,
-    ignore_booking_id: int | None = None,
-) -> bool:
+def has_booking_conflict(space_id: int, start_dt: str, end_dt: str, ignore_booking_id: int | None = None) -> bool:
     sql = """
     SELECT COUNT(1) as total
     FROM bookings
@@ -143,68 +111,8 @@ def load_spaces_options() -> dict[str, int]:
     return {row["name"]: int(row["id"]) for _, row in df.iterrows()}
 
 
-def authenticate(username: str, password: str):
-    row = fetch_one(
-        """
-        SELECT id, username, full_name, role
-        FROM users
-        WHERE username = ?
-          AND password_hash = ?
-          AND status = 'active'
-        """,
-        (username.strip(), hash_password(password)),
-    )
-    return row
-
-
-def require_role_message() -> None:
-    st.info("Você está no perfil **Visualizador**. Cadastros e alterações são permitidos apenas para **Administrador**.")
-
-
 # -----------------------------
-# UI - autenticação
-# -----------------------------
-def render_auth_sidebar() -> bool:
-    st.sidebar.markdown("## Acesso")
-
-    if "auth_user" not in st.session_state:
-        st.session_state.auth_user = None
-
-    if st.session_state.auth_user is None:
-        with st.sidebar.form("login_form"):
-            username = st.text_input("Usuário")
-            password = st.text_input("Senha", type="password")
-            submitted = st.form_submit_button("Entrar")
-
-            if submitted:
-                user = authenticate(username, password)
-                if user:
-                    st.session_state.auth_user = {
-                        "id": int(user["id"]),
-                        "username": user["username"],
-                        "full_name": user["full_name"],
-                        "role": user["role"],
-                    }
-                    st.rerun()
-                else:
-                    st.error("Usuário ou senha inválidos.")
-
-        st.sidebar.caption("Usuários iniciais: admin/admin123 e visitante/visitante123")
-        st.warning("Faça login para usar o sistema.")
-        return False
-
-    user = st.session_state.auth_user
-    st.sidebar.success(f"Logado como: {user['full_name']}")
-    st.sidebar.caption(f"Perfil: {user['role']}")
-    if st.sidebar.button("Sair"):
-        st.session_state.auth_user = None
-        st.rerun()
-
-    return True
-
-
-# -----------------------------
-# UI - páginas
+# UI
 # -----------------------------
 def page_dashboard():
     st.subheader("Visão geral")
@@ -250,49 +158,37 @@ def page_dashboard():
     st.dataframe(proximas, use_container_width=True)
 
 
-def page_spaces(can_edit: bool):
+def page_spaces():
     st.subheader("Cadastro de salas, laboratórios e espaços físicos")
 
-    if can_edit:
-        with st.expander("➕ Novo espaço", expanded=False):
-            with st.form("form_new_space", clear_on_submit=True):
-                name = st.text_input("Nome do espaço*", placeholder="Ex.: Laboratório de Química 02")
-                col1, col2, col3 = st.columns(3)
-                space_type = col1.selectbox("Tipo*", ["Sala de Aula", "Laboratório", "Outro Espaço"])
-                building = col2.text_input("Bloco/Prédio*", placeholder="Bloco A")
-                floor = col3.text_input("Andar")
-                capacity = st.number_input("Capacidade*", min_value=0, step=1, value=30)
-                resources = st.text_area("Recursos", placeholder="Projetor, ar-condicionado, computadores...")
-                status = st.selectbox("Status", ["Ativo", "Inativo", "Em manutenção"])
-                notes = st.text_area("Observações")
-                submitted = st.form_submit_button("Salvar espaço")
+    with st.expander("➕ Novo espaço", expanded=False):
+        with st.form("form_new_space", clear_on_submit=True):
+            name = st.text_input("Nome do espaço*", placeholder="Ex.: Laboratório de Química 02")
+            col1, col2, col3 = st.columns(3)
+            space_type = col1.selectbox("Tipo*", ["Sala de Aula", "Laboratório", "Outro Espaço"])
+            building = col2.text_input("Bloco/Prédio*", placeholder="Bloco A")
+            floor = col3.text_input("Andar")
+            capacity = st.number_input("Capacidade*", min_value=0, step=1, value=30)
+            resources = st.text_area("Recursos", placeholder="Projetor, ar-condicionado, computadores...")
+            status = st.selectbox("Status", ["Ativo", "Inativo", "Em manutenção"])
+            notes = st.text_area("Observações")
+            submitted = st.form_submit_button("Salvar espaço")
 
-                if submitted:
-                    if not name.strip() or not building.strip():
-                        st.error("Preencha os campos obrigatórios marcados com *.")
-                    else:
-                        try:
-                            execute(
-                                """
-                                INSERT INTO spaces (name, space_type, building, floor, capacity, resources, status, notes)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                                """,
-                                (
-                                    name.strip(),
-                                    space_type,
-                                    building.strip(),
-                                    floor.strip(),
-                                    int(capacity),
-                                    resources.strip(),
-                                    status,
-                                    notes.strip(),
-                                ),
-                            )
-                            st.success("Espaço cadastrado com sucesso!")
-                        except sqlite3.IntegrityError as exc:
-                            st.error(f"Não foi possível salvar: {exc}")
-    else:
-        require_role_message()
+            if submitted:
+                if not name.strip() or not building.strip():
+                    st.error("Preencha os campos obrigatórios marcados com *.")
+                else:
+                    try:
+                        execute(
+                            """
+                            INSERT INTO spaces (name, space_type, building, floor, capacity, resources, status, notes)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (name.strip(), space_type, building.strip(), floor.strip(), int(capacity), resources.strip(), status, notes.strip()),
+                        )
+                        st.success("Espaço cadastrado com sucesso!")
+                    except sqlite3.IntegrityError as exc:
+                        st.error(f"Não foi possível salvar: {exc}")
 
     spaces_df = fetch_df(
         """
@@ -305,9 +201,6 @@ def page_spaces(can_edit: bool):
     )
     st.markdown("### Espaços cadastrados")
     st.dataframe(spaces_df, use_container_width=True)
-
-    if not can_edit:
-        return
 
     st.markdown("### ✏️ Atualizar status de espaço")
     if spaces_df.empty:
@@ -332,7 +225,7 @@ def page_spaces(can_edit: bool):
             st.error("Não é possível excluir espaços com reservas associadas.")
 
 
-def page_bookings(can_edit: bool):
+def page_bookings():
     st.subheader("Gestão de reservas")
     spaces = load_spaces_options()
 
@@ -340,55 +233,44 @@ def page_bookings(can_edit: bool):
         st.warning("Cadastre ao menos um espaço ativo para criar reservas.")
         return
 
-    if can_edit:
-        with st.expander("➕ Nova reserva", expanded=False):
-            with st.form("form_new_booking", clear_on_submit=True):
-                title = st.text_input("Título da reserva*", placeholder="Aula de Física - 2º ano")
-                requester = st.text_input("Solicitante*", placeholder="Coordenação / Professor")
-                space_name = st.selectbox("Espaço*", list(spaces.keys()))
-                purpose = st.text_area("Finalidade")
+    with st.expander("➕ Nova reserva", expanded=False):
+        with st.form("form_new_booking", clear_on_submit=True):
+            title = st.text_input("Título da reserva*", placeholder="Aula de Física - 2º ano")
+            requester = st.text_input("Solicitante*", placeholder="Coordenação / Professor")
+            space_name = st.selectbox("Espaço*", list(spaces.keys()))
+            purpose = st.text_area("Finalidade")
 
-                c1, c2 = st.columns(2)
-                start_date = c1.date_input("Data de início", value=date.today())
-                start_time = c2.time_input("Hora de início", value=time(8, 0))
+            c1, c2 = st.columns(2)
+            start_date = c1.date_input("Data de início", value=date.today())
+            start_time = c2.time_input("Hora de início", value=time(8, 0))
 
-                c3, c4 = st.columns(2)
-                end_date = c3.date_input("Data de término", value=date.today())
-                end_time = c4.time_input("Hora de término", value=time(10, 0))
+            c3, c4 = st.columns(2)
+            end_date = c3.date_input("Data de término", value=date.today())
+            end_time = c4.time_input("Hora de término", value=time(10, 0))
 
-                status = st.selectbox("Status", ["Pendente", "Confirmado", "Cancelado"])
-                submitted = st.form_submit_button("Salvar reserva")
+            status = st.selectbox("Status", ["Pendente", "Confirmado", "Cancelado"])
+            submitted = st.form_submit_button("Salvar reserva")
 
-                if submitted:
-                    if not title.strip() or not requester.strip():
-                        st.error("Preencha os campos obrigatórios.")
+            if submitted:
+                if not title.strip() or not requester.strip():
+                    st.error("Preencha os campos obrigatórios.")
+                else:
+                    start_iso = dt_to_iso(start_date, start_time)
+                    end_iso = dt_to_iso(end_date, end_time)
+
+                    if end_iso <= start_iso:
+                        st.error("A data/hora de término deve ser maior que a de início.")
+                    elif has_booking_conflict(spaces[space_name], start_iso, end_iso):
+                        st.error("Conflito detectado: já existe reserva ativa neste intervalo.")
                     else:
-                        start_iso = dt_to_iso(start_date, start_time)
-                        end_iso = dt_to_iso(end_date, end_time)
-
-                        if end_iso <= start_iso:
-                            st.error("A data/hora de término deve ser maior que a de início.")
-                        elif has_booking_conflict(spaces[space_name], start_iso, end_iso):
-                            st.error("Conflito detectado: já existe reserva ativa neste intervalo.")
-                        else:
-                            execute(
-                                """
-                                INSERT INTO bookings (space_id, title, requester, purpose, start_dt, end_dt, status)
-                                VALUES (?, ?, ?, ?, ?, ?, ?)
-                                """,
-                                (
-                                    spaces[space_name],
-                                    title.strip(),
-                                    requester.strip(),
-                                    purpose.strip(),
-                                    start_iso,
-                                    end_iso,
-                                    status,
-                                ),
-                            )
-                            st.success("Reserva criada com sucesso!")
-    else:
-        require_role_message()
+                        execute(
+                            """
+                            INSERT INTO bookings (space_id, title, requester, purpose, start_dt, end_dt, status)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (spaces[space_name], title.strip(), requester.strip(), purpose.strip(), start_iso, end_iso, status),
+                        )
+                        st.success("Reserva criada com sucesso!")
 
     bookings_df = fetch_df(
         """
@@ -408,29 +290,24 @@ def page_bookings(can_edit: bool):
     st.markdown("### Reservas")
     st.dataframe(bookings_df, use_container_width=True)
 
-    if bookings_df.empty or not can_edit:
-        return
+    if not bookings_df.empty:
+        st.markdown("### Ações rápidas")
+        bmap = {f"#{int(r['id'])} - {r['titulo']} ({r['espaco']})": int(r["id"]) for _, r in bookings_df.iterrows()}
+        c1, c2 = st.columns([3, 1])
+        chosen = c1.selectbox("Reserva", list(bmap.keys()))
+        new_status = c2.selectbox("Novo status", ["Pendente", "Confirmado", "Cancelado"], key="booking_status")
 
-    st.markdown("### Ações rápidas")
-    bmap = {
-        f"#{int(r['id'])} - {r['titulo']} ({r['espaco']})": int(r["id"])
-        for _, r in bookings_df.iterrows()
-    }
-    c1, c2 = st.columns([3, 1])
-    chosen = c1.selectbox("Reserva", list(bmap.keys()))
-    new_status = c2.selectbox("Novo status", ["Pendente", "Confirmado", "Cancelado"], key="booking_status")
+        cc1, cc2 = st.columns(2)
+        if cc1.button("Atualizar reserva", use_container_width=True):
+            execute("UPDATE bookings SET status = ? WHERE id = ?", (new_status, bmap[chosen]))
+            st.success("Reserva atualizada.")
 
-    cc1, cc2 = st.columns(2)
-    if cc1.button("Atualizar reserva", use_container_width=True):
-        execute("UPDATE bookings SET status = ? WHERE id = ?", (new_status, bmap[chosen]))
-        st.success("Reserva atualizada.")
-
-    if cc2.button("Excluir reserva", use_container_width=True):
-        execute("DELETE FROM bookings WHERE id = ?", (bmap[chosen],))
-        st.success("Reserva excluída.")
+        if cc2.button("Excluir reserva", use_container_width=True):
+            execute("DELETE FROM bookings WHERE id = ?", (bmap[chosen],))
+            st.success("Reserva excluída.")
 
 
-def page_maintenance(can_edit: bool):
+def page_maintenance():
     st.subheader("Gestão de manutenção")
     spaces = load_spaces_options()
 
@@ -438,39 +315,29 @@ def page_maintenance(can_edit: bool):
         st.warning("Cadastre espaços antes de abrir chamados de manutenção.")
         return
 
-    if can_edit:
-        with st.expander("➕ Novo chamado", expanded=False):
-            with st.form("form_new_maintenance", clear_on_submit=True):
-                space_name = st.selectbox("Espaço", list(spaces.keys()))
-                description = st.text_area("Descrição do problema*")
-                c1, c2, c3 = st.columns(3)
-                priority = c1.selectbox("Prioridade", ["Baixa", "Média", "Alta", "Crítica"])
-                scheduled_date = c2.date_input("Data prevista", value=date.today())
-                cost = c3.number_input("Custo estimado (R$)", min_value=0.0, step=100.0)
-                status = st.selectbox("Status", ["Aberta", "Em andamento", "Concluída"])
-                submitted = st.form_submit_button("Abrir chamado")
+    with st.expander("➕ Novo chamado", expanded=False):
+        with st.form("form_new_maintenance", clear_on_submit=True):
+            space_name = st.selectbox("Espaço", list(spaces.keys()))
+            description = st.text_area("Descrição do problema*")
+            c1, c2, c3 = st.columns(3)
+            priority = c1.selectbox("Prioridade", ["Baixa", "Média", "Alta", "Crítica"])
+            scheduled_date = c2.date_input("Data prevista", value=date.today())
+            cost = c3.number_input("Custo estimado (R$)", min_value=0.0, step=100.0)
+            status = st.selectbox("Status", ["Aberta", "Em andamento", "Concluída"])
+            submitted = st.form_submit_button("Abrir chamado")
 
-                if submitted:
-                    if not description.strip():
-                        st.error("Informe a descrição do problema.")
-                    else:
-                        execute(
-                            """
-                            INSERT INTO maintenance (space_id, description, priority, scheduled_date, expected_cost, status)
-                            VALUES (?, ?, ?, ?, ?, ?)
-                            """,
-                            (
-                                spaces[space_name],
-                                description.strip(),
-                                priority,
-                                scheduled_date.isoformat(),
-                                float(cost),
-                                status,
-                            ),
-                        )
-                        st.success("Chamado registrado.")
-    else:
-        require_role_message()
+            if submitted:
+                if not description.strip():
+                    st.error("Informe a descrição do problema.")
+                else:
+                    execute(
+                        """
+                        INSERT INTO maintenance (space_id, description, priority, scheduled_date, expected_cost, status)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (spaces[space_name], description.strip(), priority, scheduled_date.isoformat(), float(cost), status),
+                    )
+                    st.success("Chamado registrado.")
 
     maint_df = fetch_df(
         """
@@ -484,17 +351,15 @@ def page_maintenance(can_edit: bool):
     st.markdown("### Chamados")
     st.dataframe(maint_df, use_container_width=True)
 
-    if maint_df.empty or not can_edit:
-        return
+    if not maint_df.empty:
+        cmap = {f"#{int(r['id'])} - {r['espaco']}": int(r["id"]) for _, r in maint_df.iterrows()}
+        c1, c2 = st.columns([3, 1])
+        chosen = c1.selectbox("Chamado", list(cmap.keys()))
+        new_status = c2.selectbox("Novo status", ["Aberta", "Em andamento", "Concluída"], key="maint_status")
 
-    cmap = {f"#{int(r['id'])} - {r['espaco']}": int(r["id"]) for _, r in maint_df.iterrows()}
-    c1, c2 = st.columns([3, 1])
-    chosen = c1.selectbox("Chamado", list(cmap.keys()))
-    new_status = c2.selectbox("Novo status", ["Aberta", "Em andamento", "Concluída"], key="maint_status")
-
-    if st.button("Atualizar chamado"):
-        execute("UPDATE maintenance SET status = ? WHERE id = ?", (new_status, cmap[chosen]))
-        st.success("Chamado atualizado.")
+        if st.button("Atualizar chamado"):
+            execute("UPDATE maintenance SET status = ? WHERE id = ?", (new_status, cmap[chosen]))
+            st.success("Chamado atualizado.")
 
 
 def page_reports():
@@ -526,7 +391,7 @@ def page_reports():
     st.dataframe(costs, use_container_width=True)
 
     st.markdown("### Exportar dados")
-    table = st.selectbox("Tabela", ["spaces", "bookings", "maintenance", "users"])
+    table = st.selectbox("Tabela", ["spaces", "bookings", "maintenance"])
     exported = fetch_df(f"SELECT * FROM {table}")
     csv_data = exported.to_csv(index=False).encode("utf-8")
     st.download_button(
@@ -544,13 +409,6 @@ def main():
     st.title("🏫 Gestão completa de salas, laboratórios e espaços físicos")
     st.caption("Aplicativo Streamlit com SQLite nativo para cadastro, reservas, manutenção e relatórios.")
 
-    logged_in = render_auth_sidebar()
-    if not logged_in:
-        st.stop()
-
-    role = st.session_state.auth_user["role"]
-    can_edit = role == "admin"
-
     menu = st.sidebar.radio(
         "Navegação",
         ["Dashboard", "Espaços", "Reservas", "Manutenção", "Relatórios"],
@@ -559,11 +417,11 @@ def main():
     if menu == "Dashboard":
         page_dashboard()
     elif menu == "Espaços":
-        page_spaces(can_edit)
+        page_spaces()
     elif menu == "Reservas":
-        page_bookings(can_edit)
+        page_bookings()
     elif menu == "Manutenção":
-        page_maintenance(can_edit)
+        page_maintenance()
     else:
         page_reports()
 

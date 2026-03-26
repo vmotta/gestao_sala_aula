@@ -10,9 +10,6 @@ Aplicativo web em **Streamlit** com banco **SQLite nativo (`sqlite3`)** para ges
 - Gestão de manutenção com prioridade, status e custo estimado
 - Dashboard com indicadores operacionais
 - Relatórios e exportação CSV
-- Dois perfis de acesso:
-  - **viewer**: apenas visualização
-  - **admin**: pode cadastrar, editar e excluir
 
 ## Como executar
 
@@ -22,13 +19,6 @@ source .venv/bin/activate
 pip install -r requirements.txt
 streamlit run app.py
 ```
-
-## Credenciais iniciais
-
-- Administrador: `admin` / `admin123`
-- Visualizador: `visitante` / `visitante123`
-
-> Altere as credenciais direto na tabela `users` por segurança em produção.
 
 ## Banco de dados
 
