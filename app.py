@@ -17,6 +17,75 @@ ROLES = {
 
 
 # -----------------------------
+# Layout (Bootstrap)
+# -----------------------------
+def inject_bootstrap() -> None:
+    st.markdown(
+        """
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        <style>
+            .hero-box {
+                background: linear-gradient(135deg, #0d6efd 0%, #3b82f6 100%);
+                color: #fff;
+                border-radius: 16px;
+                padding: 1.2rem 1.4rem;
+                margin-bottom: 1rem;
+                box-shadow: 0 8px 24px rgba(13, 110, 253, .25);
+            }
+            .metric-card {
+                border: 1px solid #e9ecef;
+                border-radius: 14px;
+                padding: .9rem 1rem;
+                background: #fff;
+                box-shadow: 0 3px 10px rgba(0,0,0,.05);
+                margin-bottom: .75rem;
+            }
+            .metric-title {
+                font-size: .86rem;
+                color: #6c757d;
+                margin-bottom: .25rem;
+            }
+            .metric-value {
+                font-size: 1.35rem;
+                font-weight: 700;
+                color: #0d6efd;
+            }
+            .table-title {
+                font-weight: 700;
+                margin: .5rem 0;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_hero(role_label: str) -> None:
+    st.markdown(
+        f"""
+        <div class="hero-box">
+            <h3 class="mb-1">🏫 Gestão de salas, laboratórios e espaços físicos</h3>
+            <div>Sistema com SQLite nativo e layout aprimorado com Bootstrap.</div>
+            <div class="mt-2"><strong>Perfil atual:</strong> {role_label}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def metric_card(title: str, value: int) -> None:
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-title">{title}</div>
+            <div class="metric-value">{value}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# -----------------------------
 # Banco de dados (SQLite nativo)
 # -----------------------------
 def get_conn():
@@ -276,10 +345,14 @@ def page_dashboard():
     pending_bookings = fetch_df("SELECT COUNT(*) as total FROM bookings WHERE status = 'Pendente'").iloc[0]["total"]
     open_maint = fetch_df("SELECT COUNT(*) as total FROM maintenance WHERE status <> 'Concluída'").iloc[0]["total"]
 
-    col1.metric("Espaços", int(total_spaces))
-    col2.metric("Reservas confirmadas", int(active_bookings))
-    col3.metric("Reservas pendentes", int(pending_bookings))
-    col4.metric("Manutenções abertas", int(open_maint))
+    with col1:
+        metric_card("Espaços", int(total_spaces))
+    with col2:
+        metric_card("Reservas confirmadas", int(active_bookings))
+    with col3:
+        metric_card("Reservas pendentes", int(pending_bookings))
+    with col4:
+        metric_card("Manutenções abertas", int(open_maint))
 
     proximas = fetch_df(
         """
@@ -556,12 +629,15 @@ def page_reports(show_users: bool):
 def main():
     st.set_page_config(page_title="Gestão de Espaços Escolares", page_icon="🏫", layout="wide")
     init_db()
-
-    st.title("🏫 Gestão de salas, laboratórios e espaços físicos")
-    st.caption("Com perfis: Administrador, Operador de Reservas e Aluno.")
+    inject_bootstrap()
 
     render_auth_sidebar()
     user = st.session_state.get("auth_user")
+
+    role_label = "Visitante (sem login)"
+    if user is not None:
+        role_label = ROLES.get(user["role"], user["role"])
+    render_hero(role_label)
 
     if user is None:
         page_dashboard()

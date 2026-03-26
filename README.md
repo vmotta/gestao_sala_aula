@@ -1,6 +1,7 @@
 # Gestão de Salas de Aula, Laboratórios e Espaços Físicos
 
 Aplicativo web em **Streamlit** com banco **SQLite nativo (`sqlite3`)** para gestão de espaços escolares, reservas e horários.
+O layout foi aprimorado com **Bootstrap 5** (via CDN) para cards e área de destaque visual.
 
 ## Perfis de usuário
 
