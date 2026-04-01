@@ -365,6 +365,8 @@ def page_manage_spaces():
     )
     st.dataframe(df, use_container_width=True)
 
+def page_manage_users():
+    st.subheader("Gerenciar usuários")
 
 def page_manage_users():
     st.subheader("Gerenciar usuários")
