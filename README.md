@@ -1,15 +1,26 @@
-# Gestão de Salas de Aula, Laboratórios e Espaços Físicos
+# Gestão de Salas e Laboratórios (Streamlit + SQLite)
 
-Aplicativo web em **Streamlit** com banco **SQLite nativo (`sqlite3`)** para gestão completa de espaços escolares.
+Sistema web para escola/universidade com dois perfis:
 
-## Funcionalidades
+- **Administrador**: cadastra salas/laboratórios, gerencia usuários, aprova/cancela reservas e acompanha quadros de visualização.
+- **Professor**: faz reservas e visualiza quadro geral e quadro por sala/laboratório.
 
-- Cadastro de espaços (sala de aula, laboratório e outros ambientes)
-- Controle de status do espaço (ativo, inativo, em manutenção)
-- Gestão de reservas com validação de conflito de horários
-- Gestão de manutenção com prioridade, status e custo estimado
-- Dashboard com indicadores operacionais
-- Relatórios e exportação CSV
+## Funcionalidades implementadas
+
+- Autenticação de usuários (admin/professor)
+- Cadastro e gestão de salas e laboratórios
+- Cadastro e ativação/inativação de usuários
+- Reserva de salas/laboratórios com detecção de conflito de horário
+- Quadro geral de reservas
+- Quadro de reservas por sala/laboratório
+- Painel com métricas para administrador
+
+## Tecnologias
+
+- Python
+- Streamlit
+- SQLite (`sqlite3` nativo)
+- Pandas
 
 ## Como executar
 
@@ -20,10 +31,17 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
+## Credenciais iniciais
+
+Ao iniciar o sistema pela primeira vez, é criado um administrador padrão:
+
+- **E-mail**: `admin@escola.local`
+- **Senha**: `admin123`
+
+> Recomendado alterar a senha criando novo usuário administrador e inativando o padrão.
+
 ## Banco de dados
 
 O arquivo SQLite é criado automaticamente na raiz do projeto:
 
 - `gestao_espacos.db`
-
-Não é necessário instalar servidor de banco.
