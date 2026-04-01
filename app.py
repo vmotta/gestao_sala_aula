@@ -135,9 +135,12 @@ def authenticate(email: str, password: str):
 
 
 # -----------------------------
-# UI - Autenticação / Tela inicial
+# UI - Autenticação
 # -----------------------------
-def show_login_form():
+def show_login():
+    st.title("🏫 Sistema de Salas e Laboratórios")
+    st.caption("Login obrigatório para administrador e professores")
+
     with st.form("form_login"):
         email = st.text_input("E-mail")
         password = st.text_input("Senha", type="password")
@@ -154,42 +157,6 @@ def show_login_form():
 
     with st.expander("Credenciais iniciais"):
         st.info("Admin padrão: admin@escola.local / admin123")
-
-
-def show_restricted_area(user: dict):
-    st.caption(f"Usuário logado: {user['name']} ({user['role']})")
-
-    if st.button("Sair"):
-        st.session_state.pop("user", None)
-        st.rerun()
-
-    if user["role"] == "admin":
-        menu = st.radio(
-            "Navegação administrativa",
-            [
-                "Gerenciar Salas/Labs",
-                "Gerenciar Usuários",
-                "Reservar",
-                "Gerenciar Reservas",
-                "Painel",
-            ],
-        )
-        if menu == "Gerenciar Salas/Labs":
-            page_manage_spaces()
-        elif menu == "Gerenciar Usuários":
-            page_manage_users()
-        elif menu == "Reservar":
-            page_reserve_room(user)
-        elif menu == "Gerenciar Reservas":
-            page_my_bookings(user)
-        else:
-            page_admin_reports()
-    else:
-        menu = st.radio("Navegação do professor", ["Reservar", "Minhas Reservas"])
-        if menu == "Reservar":
-            page_reserve_room(user)
-        else:
-            page_my_bookings(user)
 
 
 # -----------------------------
@@ -398,6 +365,8 @@ def page_manage_spaces():
     )
     st.dataframe(df, use_container_width=True)
 
+def page_manage_users():
+    st.subheader("Gerenciar usuários")
 
 def page_manage_users():
     st.subheader("Gerenciar usuários")
@@ -474,23 +443,61 @@ def main():
     init_db()
 
     user = st.session_state.get("user")
+
+    if not user:
+        show_login()
+        return
+
     st.title("🏫 Gestão de Salas e Laboratórios")
-    st.caption("Quadro Geral e Quadro por Sala ficam sempre disponíveis para todos os acessos.")
+    st.caption(f"Usuário logado: {user['name']} ({user['role']})")
 
-    tab_geral, tab_sala, tab_area = st.tabs(["Quadro Geral", "Quadro por Sala", "Área Restrita"])
+    if st.sidebar.button("Sair"):
+        st.session_state.pop("user", None)
+        st.rerun()
 
-    with tab_geral:
-        page_overview_board()
+    if user["role"] == "admin":
+        menu = st.sidebar.radio(
+            "Navegação",
+            [
+                "Painel",
+                "Gerenciar Salas/Labs",
+                "Gerenciar Usuários",
+                "Reservar",
+                "Gerenciar Reservas",
+                "Quadro Geral",
+                "Quadro por Sala",
+            ],
+        )
 
-    with tab_sala:
-        page_room_board()
-
-    with tab_area:
-        if user:
-            show_restricted_area(user)
+        if menu == "Painel":
+            page_admin_reports()
+        elif menu == "Gerenciar Salas/Labs":
+            page_manage_spaces()
+        elif menu == "Gerenciar Usuários":
+            page_manage_users()
+        elif menu == "Reservar":
+            page_reserve_room(user)
+        elif menu == "Gerenciar Reservas":
+            page_my_bookings(user)
+        elif menu == "Quadro Geral":
+            page_overview_board()
         else:
-            st.markdown("### Login de administrador/professor")
-            show_login_form()
+            page_room_board()
+
+    else:
+        menu = st.sidebar.radio(
+            "Navegação",
+            ["Reservar", "Minhas Reservas", "Quadro Geral", "Quadro por Sala"],
+        )
+
+        if menu == "Reservar":
+            page_reserve_room(user)
+        elif menu == "Minhas Reservas":
+            page_my_bookings(user)
+        elif menu == "Quadro Geral":
+            page_overview_board()
+        else:
+            page_room_board()
 
 
 if __name__ == "__main__":
