@@ -13,7 +13,6 @@ Sistema web para escola/universidade com dois perfis:
 - Reserva de salas/laboratórios com detecção de conflito de horário
 - Quadro geral de reservas
 - Quadro de reservas por sala/laboratório
-- Primeira tela pública com abas de quadro geral, quadro por sala e login
 - Painel com métricas para administrador
 
 ## Tecnologias

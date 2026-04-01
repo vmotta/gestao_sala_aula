@@ -135,9 +135,12 @@ def authenticate(email: str, password: str):
 
 
 # -----------------------------
-# UI - Autenticação / Tela inicial
+# UI - Autenticação
 # -----------------------------
-def show_login_form():
+def show_login():
+    st.title("🏫 Sistema de Salas e Laboratórios")
+    st.caption("Login obrigatório para administrador e professores")
+
     with st.form("form_login"):
         email = st.text_input("E-mail")
         password = st.text_input("Senha", type="password")
@@ -154,21 +157,6 @@ def show_login_form():
 
     with st.expander("Credenciais iniciais"):
         st.info("Admin padrão: admin@escola.local / admin123")
-
-
-def show_public_home():
-    st.title("🏫 Sistema de Salas e Laboratórios")
-    st.caption("Primeira tela com visualização geral, visualização por sala e login.")
-
-    tab_geral, tab_sala, tab_login = st.tabs(["Quadro Geral", "Quadro por Sala", "Login"])
-
-    with tab_geral:
-        page_overview_board()
-    with tab_sala:
-        page_room_board()
-    with tab_login:
-        st.markdown("### Acesso de administrador e professor")
-        show_login_form()
 
 
 # -----------------------------
@@ -377,6 +365,8 @@ def page_manage_spaces():
     )
     st.dataframe(df, use_container_width=True)
 
+def page_manage_users():
+    st.subheader("Gerenciar usuários")
 
 def page_manage_users():
     st.subheader("Gerenciar usuários")
@@ -455,7 +445,7 @@ def main():
     user = st.session_state.get("user")
 
     if not user:
-        show_public_home()
+        show_login()
         return
 
     st.title("🏫 Gestão de Salas e Laboratórios")
@@ -469,20 +459,18 @@ def main():
         menu = st.sidebar.radio(
             "Navegação",
             [
-                "Quadro Geral",
-                "Quadro por Sala",
+                "Painel",
                 "Gerenciar Salas/Labs",
                 "Gerenciar Usuários",
                 "Reservar",
                 "Gerenciar Reservas",
-                "Painel",
+                "Quadro Geral",
+                "Quadro por Sala",
             ],
         )
 
-        if menu == "Quadro Geral":
-            page_overview_board()
-        elif menu == "Quadro por Sala":
-            page_room_board()
+        if menu == "Painel":
+            page_admin_reports()
         elif menu == "Gerenciar Salas/Labs":
             page_manage_spaces()
         elif menu == "Gerenciar Usuários":
@@ -491,23 +479,25 @@ def main():
             page_reserve_room(user)
         elif menu == "Gerenciar Reservas":
             page_my_bookings(user)
+        elif menu == "Quadro Geral":
+            page_overview_board()
         else:
-            page_admin_reports()
+            page_room_board()
 
     else:
         menu = st.sidebar.radio(
             "Navegação",
-            ["Quadro Geral", "Quadro por Sala", "Reservar", "Minhas Reservas"],
+            ["Reservar", "Minhas Reservas", "Quadro Geral", "Quadro por Sala"],
         )
 
-        if menu == "Quadro Geral":
-            page_overview_board()
-        elif menu == "Quadro por Sala":
-            page_room_board()
-        elif menu == "Reservar":
+        if menu == "Reservar":
             page_reserve_room(user)
-        else:
+        elif menu == "Minhas Reservas":
             page_my_bookings(user)
+        elif menu == "Quadro Geral":
+            page_overview_board()
+        else:
+            page_room_board()
 
 
 if __name__ == "__main__":
